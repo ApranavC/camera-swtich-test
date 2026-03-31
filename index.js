@@ -337,7 +337,9 @@ async function handleSwitchCamRequest(message) {
       targetMode === "front" ? bestCameras.front : bestCameras.back;
 
     if (!deviceId) {
-      console.warn(`[Client] No ${targetMode} camera in bestCameras`);
+      const msg = `No ${targetMode} camera found on this device.`;
+      console.warn(`[Client] ${msg}`);
+      alert(msg);
       return;
     }
 
@@ -405,6 +407,10 @@ async function handleSwitchCamV2(message) {
   }
 }
 
+// Expose handlers to window for testing
+window.handleSwitchCamRequest = handleSwitchCamRequest;
+window.handleSwitchCamV2 = handleSwitchCamV2;
+
 // ─────────────────────────────────────────────
 // Video / Audio Element Creators
 // ─────────────────────────────────────────────
@@ -422,16 +428,25 @@ function createAudioElement(participant) {
 function createVideoElement(participant, type) {
   if (!participant?.id) return;
   const elementId = `f-${participant.id}-${type}`;
-  if (document.getElementById(elementId)) return;
+  const existingWrapper = document.getElementById(elementId);
+  const videoElement = participant.renderVideo({ type, maxQuality: "auto" });
+  videoElement.id = `v-${participant.id}-${type}`;
+
+  if (existingWrapper) {
+    const oldVideo = existingWrapper.querySelector("video");
+    if (oldVideo) {
+      oldVideo.srcObject = videoElement.srcObject;
+    } else {
+      existingWrapper.prepend(videoElement);
+    }
+    return;
+  }
 
   const wrapper = document.createElement("div");
   wrapper.id = elementId;
   wrapper.className = `video-tile ${
     participant.displayName === "Client" ? "client-tile" : ""
   }`;
-
-  const videoElement = participant.renderVideo({ type, maxQuality: "auto" });
-  videoElement.id = `v-${participant.id}-${type}`;
   wrapper.appendChild(videoElement);
 
   const nameLabel = document.createElement("div");
