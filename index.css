@@ -1,0 +1,372 @@
+.hidden-svg {
+  display: none;
+}
+
+.join-preview-container {
+  width: 400px;
+  margin-top: 20px;
+}
+
+.debug-timing-box {
+  margin-top: 10px;
+  padding: 10px;
+  background: #111;
+  color: #0f0;
+  font-family: monospace;
+  white-space: pre-wrap;
+  border-radius: 8px;
+  max-width: 400px;
+  display: none;
+}
+
+.captured-image {
+  max-width: 400px;
+  border-radius: 8px;
+  border: 2px solid #444;
+  display: block;
+}
+
+#videoContainer {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+  padding: 20px;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.video-tile {
+  width: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: black;
+  position: relative;
+}
+
+.video-tile.client-tile {
+  aspect-ratio: 9 / 16;
+}
+
+.video-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stats-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.stats-overlay {
+  position: absolute;
+  top: 35px;
+  right: 8px;
+  width: 220px;
+  max-height: 200px;
+  overflow: auto;
+  font-size: 10px;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #00ff99;
+  border-radius: 8px;
+  white-space: pre-wrap;
+}
+
+.participant-name {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: white;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mic-icon {
+  font-size: 14px;
+}
+
+/* New Styles */
+#controls {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: #f0f0f0;
+  border-bottom: 1px solid #ccc;
+  flex-wrap: wrap;
+}
+
+#morePanel,
+#statsPanel {
+  display: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 400px;
+  height: 100%;
+  background: white;
+  box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+#morePanel h2,
+#statsPanel h2 {
+  margin-top: 0;
+}
+
+.stats-participant-item {
+  margin-bottom: 10px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  overflow: hidden;
+}
+
+.stats-header {
+  padding: 10px;
+  background: #f1f5f9;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+
+.stats-header:hover {
+  background: #e2e8f0;
+}
+
+.stats-participant-name {
+  font-weight: bold;
+  font-size: 13px;
+  color: #333;
+}
+
+.stats-toggle-icon {
+  font-size: 16px;
+  font-weight: bold;
+  color: #64748b;
+  transition: transform 0.2s;
+}
+
+.stats-content {
+  padding: 10px;
+  display: block;
+}
+
+.stats-participant-item.collapsed .stats-content {
+  display: none;
+}
+
+.stats-participant-item.collapsed .stats-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.stats-kind-section {
+  background: #f0f0f0;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.stats-kind-title {
+  font-size: 11px;
+  font-weight: bold;
+  color: #555;
+  margin-bottom: 5px;
+  display: block;
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 2px;
+}
+
+.stats-data-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.stats-box {
+  background: white;
+  padding: 6px;
+  border-radius: 4px;
+  font-family: "Inter", monospace;
+  font-size: 11px;
+  border: 1px solid #eee;
+}
+
+.stats-label {
+  font-size: 9px;
+  color: #888;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.stats-value {
+  color: #111;
+  font-weight: 500;
+}
+
+.panel-section {
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.panel-section h3 {
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+button {
+  padding: 8px 12px;
+  cursor: pointer;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+}
+
+button:hover {
+  background: #e0e0e0;
+}
+
+#debugToggle {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 1000;
+  background: #333;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: sans-serif;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  transition: background 0.2s;
+}
+
+#debugToggle:hover {
+  background: #444;
+}
+
+#eventLog {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 200px;
+  background: rgba(0, 0, 0, 0.9);
+  color: #0f0;
+  font-family: monospace;
+  font-size: 12px;
+  overflow-y: auto;
+  padding: 15px;
+  z-index: 900;
+  box-sizing: border-box;
+  border-top: 1px solid #444;
+  display: none;
+}
+
+#join-screen {
+  max-width: 600px;
+  margin: 50px auto;
+  padding: 30px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+#join-screen button {
+  background: #007bff;
+  color: white;
+  border: none;
+  font-weight: 600;
+  margin-right: 10px;
+  margin-bottom: 20px;
+  padding: 12px 24px;
+}
+
+#join-screen button:hover {
+  background: #0056b3;
+}
+
+#grid-screen {
+  padding: 20px;
+}
+
+#meetingIdHeading {
+  font-family: "Inter", sans-serif;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+#controls {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+}
+
+#controls button {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+#controls button:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+#leaveBtn {
+  background: #fee2e2 !important;
+  color: #ef4444 !important;
+  border-color: #fca5a5 !important;
+}
+
+#leaveBtn:hover {
+  background: #fecaca !important;
+}
+
+#endBtn {
+  background: #ef4444 !important;
+  color: white !important;
+  border: none !important;
+}
+
+#endBtn:hover {
+  background: #dc2626 !important;
+}

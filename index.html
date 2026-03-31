@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+  <head>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+
+  <body>
+    <svg class="hidden-svg">
+      <symbol id="icon-mic-on" viewBox="0 0 24 24">
+        <path
+          d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"
+          fill="white"
+        />
+        <path
+          d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"
+          fill="white"
+        />
+      </symbol>
+      <symbol id="icon-mic-off" viewBox="0 0 22.375 22.375">
+        <g transform="translate(1.602 2.849)">
+          <path
+            d="M0,0H18.064V18.064H0ZM0,0H18.064V18.064H0Z"
+            fill="none"
+          ></path>
+          <path
+            d="M18.09,10.792H16.805a3.711,3.711,0,0,1-.329,1.548l.931.929A4.884,4.884,0,0,0,18.09,10.792Zm-3.034.124c0-.041.011-.083.011-.124V6.262a2.267,2.267,0,1,0-4.533,0V6.4ZM6.963,4.752,6,5.714l4.541,4.538V10.8A2.261,2.261,0,0,0,12.8,13.061,2.331,2.331,0,0,0,13.292,13l1.254,1.253a4.167,4.167,0,0,1-1.746.389,3.919,3.919,0,0,1-4-3.85H7.511a5.268,5.268,0,0,0,4.533,5.073v2.472h1.511V15.866a5.358,5.358,0,0,0,1.919-.683l3.162,3.16.963-.959Z"
+            transform="translate(-3.768 -2.509)"
+            fill="white"
+          ></path>
+        </g>
+      </symbol>
+    </svg>
+
+    <div id="join-screen">
+      <!-- Join Buttons -->
+      <button id="Client">Join Meeting as Client</button>
+      <button id="Agent">Join Meeting as Agent</button>
+
+      <!-- Dropdown for Microphones -->
+      <label for="micSelect">Select Microphone:</label>
+      <select id="micSelect"></select>
+
+      <!-- Dropdown for Webcams (only best front/back populated by JS) -->
+      <label for="webcamSelect">Select Webcam:</label>
+      <select id="webcamSelect"></select>
+
+      <div
+        class="row join-preview-container"
+        id="join-screen-video-container"
+      ></div>
+      <div id="cameraTimingBox" class="debug-timing-box"></div>
+    </div>
+
+    <!-- for Managing meeting status -->
+    <div id="textDiv"></div>
+
+    <div id="grid-screen" style="display: none">
+      <!-- To Display MeetingId -->
+      <h3 id="meetingIdHeading"></h3>
+
+      <!-- Main Controllers -->
+      <div id="controls">
+        <button id="leaveBtn">Leave</button>
+        <button id="endBtn">End</button>
+        <button id="toggleMicBtn">Start Mic</button>
+        <button id="toggleWebCamBtn">Stop WebCam</button>
+        <button id="switchClientCamBtn" style="display: none">
+          Switch Cam (v1)
+        </button>
+        <button id="switchCamBtn" style="display: none">Switch Cam (v2)</button>
+
+        <!-- Agent-only buttons -->
+        <button id="captureClientImageBtn" style="display: none">
+          Capture Client Image
+        </button>
+      </div>
+
+      <!-- Agent-only: captured image preview -->
+      <div id="imagePreviewPanel" style="display: none; margin-top: 12px">
+        <h4 style="margin: 0 0 6px">Captured Client Image</h4>
+        <img
+          id="capturedImageEl"
+          src=""
+          alt="Captured Image"
+          class="captured-image"
+        />
+        <p
+          id="imageStatusText"
+          style="font-size: 12px; color: #aaa; margin-top: 4px"
+        ></p>
+      </div>
+
+      <!-- render Video -->
+      <div class="row" id="videoContainer"></div>
+    </div>
+
+    <div id="eventLog"></div>
+    <div id="debugToggle" onclick="toggleDebug()">Show Debug info</div>
+
+    <script>
+      function toggleDebug() {
+        const log = document.getElementById('eventLog');
+        const timing = document.getElementById('cameraTimingBox');
+        const btn = document.getElementById('debugToggle');
+        const isHidden = log.style.display === 'none';
+        log.style.display = isHidden ? 'block' : 'none';
+        timing.style.display = isHidden ? 'block' : 'none';
+        btn.innerText = isHidden ? 'Hide Debug info' : 'Show Debug info';
+      }
+    </script>
+    <script type="module" src="config.js"></script>
+    <script type="module" src="index.js"></script>
+  </body>
+</html>
