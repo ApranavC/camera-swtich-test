@@ -88,9 +88,9 @@ async function initializeMeeting(token, meetingId, participantName, role) {
   // Local participant streams
   meeting.localParticipant.on("stream-enabled", (stream) => {
     if (stream.kind === "video")
-      createVideoElement(meeting.localParticipant, "video");
+      createVideoElement(meeting.localParticipant, "video", stream);
     else if (stream.kind === "share")
-      createVideoElement(meeting.localParticipant, "share");
+      createVideoElement(meeting.localParticipant, "share", stream);
   });
 
   meeting.localParticipant.on("stream-disabled", (stream) => {
@@ -178,8 +178,8 @@ function handleMeetingEvent(name, data) {
       console.log("participant joined:", data.displayName);
 
       data.on("stream-enabled", (stream) => {
-        if (stream.kind === "video") createVideoElement(data, "video");
-        else if (stream.kind === "share") createVideoElement(data, "share");
+        if (stream.kind === "video") createVideoElement(data, "video", stream);
+        else if (stream.kind === "share") createVideoElement(data, "share", stream);
         else if (stream.kind === "audio") createAudioElement(data);
       });
 
@@ -425,28 +425,41 @@ function createAudioElement(participant) {
   document.body.appendChild(audioElement);
 }
 
-function createVideoElement(participant, type) {
+function createVideoElement(participant, type, stream) {
   if (!participant?.id) return;
   const elementId = `f-${participant.id}-${type}`;
-  const existingWrapper = document.getElementById(elementId);
-  const videoElement = participant.renderVideo({ type, maxQuality: "auto" });
-  videoElement.id = `v-${participant.id}-${type}`;
 
+  // Tear down any existing tile cleanly before rebuilding
+  const existingWrapper = document.getElementById(elementId);
   if (existingWrapper) {
     const oldVideo = existingWrapper.querySelector("video");
     if (oldVideo) {
-      oldVideo.srcObject = videoElement.srcObject;
-    } else {
-      existingWrapper.prepend(videoElement);
+      oldVideo.pause();
+      oldVideo.srcObject = null;
     }
-    return;
+    existingWrapper.remove();
   }
+
+  // ─── Use stream.track directly (like the working reference example) ───────
+  // We do NOT use renderVideo() because the SDK manages that element's play()
+  // internally, which races with our own play() calls and causes AbortErrors.
+  const mediaStream = new MediaStream();
+  if (stream?.track) mediaStream.addTrack(stream.track);
+
+  const videoElement = document.createElement("video");
+  videoElement.id = `v-${participant.id}-${type}`;
+  videoElement.setAttribute("playsinline", true);
+  videoElement.autoplay = true;
+  videoElement.srcObject = mediaStream;
+  videoElement.play().catch((err) => {
+    // Only log real errors, not expected interruptions during track swaps
+    if (err.name !== "AbortError") console.error("[Video] play() failed:", err);
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   const wrapper = document.createElement("div");
   wrapper.id = elementId;
-  wrapper.className = `video-tile ${
-    participant.displayName === "Client" ? "client-tile" : ""
-  }`;
+  wrapper.className = `video-tile ${participant.displayName === "Client" ? "client-tile" : ""}`;
   wrapper.appendChild(videoElement);
 
   const nameLabel = document.createElement("div");
@@ -700,6 +713,6 @@ webcamSelect.addEventListener("change", () => startCameraPreview());
 
 // Initialize on load
 window.addEventListener("load", async () => {
-  detectBestCameras(); // Run in background to speed up initial load
-  initDevices();
+  await initDevices();
+  detectBestCameras();
 });
