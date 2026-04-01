@@ -714,6 +714,6 @@ webcamSelect.addEventListener("change", () => startCameraPreview());
 
 // Initialize on load
 window.addEventListener("load", async () => {
+  await detectBestCameras();
   await initDevices();
-  detectBestCameras();
 });
