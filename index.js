@@ -632,12 +632,13 @@ async function detectBestCameras() {
     bestCameras.back = back?.deviceId || sortedAll[1]?.deviceId || null;
 
     const totalTime = (performance.now() - globalStart).toFixed(2);
-    logText += `Best Front ID: ${front?.label || bestCameras.front || "None"}\n`;
-    logText += `Best Back ID : ${back?.label || bestCameras.back || "None"}\n\n`;
-    logText += `Total Time: ${totalTime} ms\n`;
+    logText += `Best Front: ${front?.label || bestCameras.front || "None"}\n`;
+    logText += `Best Back : ${back?.label || bestCameras.back || "None"}\n\n`;
+    logText += `Total Detection Time: ${totalTime} ms\n`;
     timingEl.innerText = logText;
 
-    console.log("[Camera Detection] Deep detect finished:", bestCameras);
+    // Also log to console so timings are visible without opening the debug panel
+    console.log(`[Camera Detection] Finished in ${totalTime} ms\n` + logText);
     return bestCameras;
   } catch (err) {
     timingEl.innerText = `Error during detection\nTime: ${(performance.now() - globalStart).toFixed(2)} ms`;

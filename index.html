@@ -95,18 +95,21 @@
       <div class="row" id="videoContainer"></div>
     </div>
 
-    <div id="eventLog"></div>
+
     <div id="debugToggle" onclick="toggleDebug()">Show Debug info</div>
 
     <script>
       function toggleDebug() {
-        const log = document.getElementById('eventLog');
         const timing = document.getElementById('cameraTimingBox');
         const btn = document.getElementById('debugToggle');
-        const isHidden = log.style.display === 'none';
-        log.style.display = isHidden ? 'block' : 'none';
+        const isHidden = getComputedStyle(timing).display === 'none';
+
         timing.style.display = isHidden ? 'block' : 'none';
         btn.innerText = isHidden ? 'Hide Debug info' : 'Show Debug info';
+
+        if (isHidden && timing.innerText) {
+          timing.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
       }
     </script>
     <script type="module" src="config.js"></script>
