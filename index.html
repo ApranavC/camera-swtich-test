@@ -33,9 +33,17 @@
     </svg>
 
     <div id="join-screen">
-      <!-- Join Buttons -->
-      <button id="Client">Join Meeting as Client</button>
-      <button id="Agent">Join Meeting as Agent</button>
+      <!-- Join Buttons (disabled until camera detection completes) -->
+      <button id="Client" disabled>Join Meeting as Client</button>
+      <button id="Agent" disabled>Join Meeting as Agent</button>
+
+      <!-- Best detected cameras -->
+      <p
+        id="bestCameraInfo"
+        style="font-size: 13px; margin: 8px 0; white-space: pre-line"
+      >
+        Detecting best cameras…
+      </p>
 
       <!-- Dropdown for Microphones -->
       <label for="micSelect">Select Microphone:</label>
@@ -58,6 +66,11 @@
     <div id="grid-screen" style="display: none">
       <!-- To Display MeetingId -->
       <h3 id="meetingIdHeading"></h3>
+
+      <!-- Currently active camera -->
+      <div id="currentCamLabel" style="font-size: 13px; margin: 4px 0 8px">
+        Camera: —
+      </div>
 
       <!-- Main Controllers -->
       <div id="controls">

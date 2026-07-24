@@ -8,6 +8,8 @@ const textDiv = document.getElementById("textDiv");
 const joinScreenVideoContainer = document.getElementById(
   "join-screen-video-container",
 );
+const bestCameraInfo = document.getElementById("bestCameraInfo");
+const currentCamLabel = document.getElementById("currentCamLabel");
 
 // Buttons
 const leaveBtn = document.getElementById("leaveBtn");
@@ -33,6 +35,7 @@ const TOPIC_CAPTURE_IMAGE = "CAPTURE_IMAGE";
 const TOPIC_IMAGE_URL = "IMAGE_URL";
 const TOPIC_SWITCH_CAM = "SWITCH_CAM";
 const TOPIC_SWITCH_CAM_V2 = "SWITCH_CAM_V2";
+const TOPIC_CLIENT_CAM_INFO = "CLIENT_CAM_INFO";
 
 // State
 let meeting = null;
@@ -41,6 +44,120 @@ let currentCameraMode = "front";
 
 // Best cameras detected on join screen
 const bestCameras = { front: null, back: null };
+
+// Label + deviceId + facingMode of the camera currently sending video
+let activeCameraLabel = null;
+let activeCameraDeviceId = null;
+let activeCameraFacingMode = null;
+
+function updateCamLabelDisplay(on) {
+  currentCamLabel.textContent = on
+    ? `Camera (${currentCameraMode}): ${activeCameraLabel || "Unknown"}`
+    : "Camera: off";
+}
+
+function setActiveCameraFromStream(stream) {
+  const track = stream?.getVideoTracks?.()[0] || stream?.track;
+  if (track?.label) activeCameraLabel = track.label;
+  const settings = track?.getSettings?.() || {};
+  if (settings.deviceId) activeCameraDeviceId = settings.deviceId;
+  if (settings.facingMode) activeCameraFacingMode = settings.facingMode;
+  updateCamLabelDisplay(true);
+}
+
+// Ground truth: the video track the SDK is actually sending right now
+function getLiveLocalVideoTrack() {
+  if (!meeting) return null;
+  let live = null;
+  meeting.localParticipant.streams?.forEach((s) => {
+    if (s.kind === "video" && s.track) live = s.track;
+  });
+  return live;
+}
+
+// Measure (don't assume) which camera ended up enabled after a switch.
+// Reads the live sender track; falls back to the custom track we created
+// only if it is still alive. Warns when the result differs from what was
+// requested — i.e. the switch silently did not take effect.
+function reportEnabledCamera(context, requestedDeviceId, targetMode, fallbackStream) {
+  let track = getLiveLocalVideoTrack();
+  const custom = fallbackStream?.getVideoTracks?.()[0] || null;
+  const liveId = track?.getSettings?.().deviceId;
+  if ((!track || liveId !== requestedDeviceId) && custom?.readyState === "live") {
+    track = custom;
+  }
+
+  const settings = track?.getSettings?.() || {};
+  if (track?.label) activeCameraLabel = track.label;
+  if (settings.deviceId) activeCameraDeviceId = settings.deviceId;
+  if (settings.facingMode) activeCameraFacingMode = settings.facingMode;
+
+  // Trust the measured facingMode over our assumed toggle when available
+  if (settings.facingMode === "user") currentCameraMode = "front";
+  else if (settings.facingMode === "environment") currentCameraMode = "back";
+  else currentCameraMode = targetMode;
+
+  updateCamLabelDisplay(true);
+
+  console.log(
+    `[Client] ${context} enabled camera → id: ${activeCameraDeviceId}, label: ${activeCameraLabel}, facingMode: ${settings.facingMode || "unknown"}, mode: ${currentCameraMode}`,
+  );
+
+  if (
+    requestedDeviceId &&
+    settings.deviceId &&
+    settings.deviceId !== requestedDeviceId
+  ) {
+    console.warn(
+      `[Client] Requested camera ${requestedDeviceId} but the live track is ${settings.deviceId} — the switch DID NOT take effect (device may not allow opening this camera while another is live).`,
+    );
+  }
+}
+
+// Client → Agent: publish camera list + currently enabled camera
+async function publishClientCamInfo(type) {
+  if (!meeting || currentRole !== "client") return;
+  try {
+    const cameras = await VideoSDK.getCameras();
+    const liveTrack = getLiveLocalVideoTrack();
+    const liveSettings = liveTrack?.getSettings?.() || {};
+    const payload = {
+      type,
+      cameras: cameras.map((c) => ({ deviceId: c.deviceId, label: c.label })),
+      best: { ...bestCameras },
+      enabled: {
+        deviceId: liveSettings.deviceId || activeCameraDeviceId,
+        label: liveTrack?.label || activeCameraLabel,
+        facingMode: liveSettings.facingMode || activeCameraFacingMode || "unknown",
+        mode: currentCameraMode,
+      },
+    };
+    meeting.pubSub.publish(TOPIC_CLIENT_CAM_INFO, JSON.stringify(payload), {
+      persist: false,
+    });
+  } catch (e) {
+    console.error("[Client] Failed to publish cam info:", e);
+  }
+}
+
+// Agent: log client camera list / enabled camera
+function handleClientCamInfo(message) {
+  try {
+    const data = JSON.parse(message.message);
+    if (data.type === "list") {
+      console.log("[Agent] Client camera list (id + label):");
+      console.table(data.cameras);
+      console.log("[Agent] Client best cameras:", data.best);
+      console.log("[Agent] Client enabled camera:", data.enabled);
+    } else if (data.type === "switched" || data.type === "enabled") {
+      console.log(
+        `[Agent] Client camera ${data.type} → mode: ${data.enabled.mode}, facingMode: ${data.enabled.facingMode}, id: ${data.enabled.deviceId}, label: ${data.enabled.label}`,
+      );
+    }
+  } catch (e) {
+    console.error("[Agent] Failed to parse client cam info:", e);
+  }
+}
 
 async function initializeMeeting(token, meetingId, participantName, role) {
   VideoSDK.setLogLevel("DEBUG");
@@ -87,9 +204,12 @@ async function initializeMeeting(token, meetingId, participantName, role) {
 
   // Local participant streams
   meeting.localParticipant.on("stream-enabled", (stream) => {
-    if (stream.kind === "video")
+    if (stream.kind === "video") {
+      setActiveCameraFromStream(stream);
+      // Now there is a real live track to report — refresh the agent's info
+      publishClientCamInfo("enabled");
       createVideoElement(meeting.localParticipant, "video", stream);
-    else if (stream.kind === "share")
+    } else if (stream.kind === "share")
       createVideoElement(meeting.localParticipant, "share", stream);
   });
 
@@ -103,8 +223,10 @@ async function initializeMeeting(token, meetingId, participantName, role) {
   meeting.localParticipant.on("media-status-changed", ({ kind, newStatus }) => {
     if (kind === "audio")
       toggleMicBtn.innerText = newStatus ? "Stop Mic" : "Start Mic";
-    else if (kind === "video")
+    else if (kind === "video") {
       toggleWebCamBtn.innerText = newStatus ? "Stop WebCam" : "Start WebCam";
+      updateCamLabelDisplay(newStatus);
+    }
   });
 
   // Meeting events
@@ -145,6 +267,9 @@ function handleMeetingEvent(name, data) {
 
         // Agent subscribes to IMAGE_URL topic to receive image from client
         meeting.pubSub.subscribe(TOPIC_IMAGE_URL, handleImageUrlReceived);
+
+        // Agent subscribes to client camera info (list + enabled cam id)
+        meeting.pubSub.subscribe(TOPIC_CLIENT_CAM_INFO, handleClientCamInfo);
       }
 
       // Client: subscribe to topics
@@ -155,6 +280,9 @@ function handleMeetingEvent(name, data) {
         );
         meeting.pubSub.subscribe(TOPIC_SWITCH_CAM, handleSwitchCamRequest);
         meeting.pubSub.subscribe(TOPIC_SWITCH_CAM_V2, handleSwitchCamV2);
+
+        // Send camera list to agent
+        publishClientCamInfo("list");
       }
 
       break;
@@ -176,6 +304,9 @@ function handleMeetingEvent(name, data) {
 
     case "participant-joined": {
       console.log("participant joined:", data.displayName);
+
+      // Re-send camera list so an agent joining after the client still gets it
+      if (currentRole === "client") publishClientCamInfo("list");
 
       data.on("stream-enabled", (stream) => {
         if (stream.kind === "video") createVideoElement(data, "video", stream);
@@ -318,6 +449,61 @@ switchClientCamBtn.addEventListener("click", () => {
   console.log("[Agent] Requested client to toggle camera");
 });
 
+// Resolve when the local video stream comes (back) up, or on timeout
+function waitForLocalVideoStream(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (val) => {
+      if (!done) {
+        done = true;
+        resolve(val);
+      }
+    };
+    setTimeout(() => finish(null), timeoutMs);
+    const handler = (stream) => {
+      if (stream.kind === "video") {
+        finish(stream);
+        meeting?.localParticipant?.off?.("stream-enabled", handler);
+      }
+    };
+    meeting.localParticipant.on("stream-enabled", handler);
+  });
+}
+
+// Shared switch flow: release the current camera BEFORE opening the target.
+// Many Android devices cannot open a second camera while one is live —
+// with changeWebcam() the new track silently ended up on the same (front)
+// camera. Disabling first guarantees the hardware is free.
+async function switchToCamera(context, deviceId, targetMode) {
+  meeting.disableWebcam();
+  await new Promise((r) => setTimeout(r, 300)); // let the device release
+
+  let customTrack;
+  try {
+    customTrack = await VideoSDK.createCameraVideoTrack({
+      cameraId: deviceId,
+      optimizationMode: "motion",
+      encoderConfig: "h720p_w1280p",
+      multiStream: true,
+    });
+  } catch (err) {
+    console.error(
+      `[Client] ${context} could not open camera ${deviceId}, restoring previous webcam:`,
+      err,
+    );
+    meeting.enableWebcam();
+    return;
+  }
+
+  const streamPromise = waitForLocalVideoStream();
+  meeting.enableWebcam(customTrack);
+  const newStream = await streamPromise;
+  if (newStream) setActiveCameraFromStream(newStream);
+
+  reportEnabledCamera(context, deviceId, targetMode, customTrack);
+  publishClientCamInfo("switched");
+}
+
 // Client: switch camera on agent request (Approach 1 — uses bestCameras)
 async function handleSwitchCamRequest(message) {
   const side = message.message;
@@ -343,65 +529,36 @@ async function handleSwitchCamRequest(message) {
       return;
     }
 
-    const customTrack = await VideoSDK.createCameraVideoTrack({
-      cameraId: deviceId,
-      optimizationMode: "motion",
-      encoderConfig: "h720p_w1280p",
-      multiStream: true,
-    });
-
-    console.log("video Track ", customTrack);
-
-    await meeting.changeWebcam(customTrack);
-
-    currentCameraMode = targetMode;
-
-    console.log(`[Client] V1 switched to ${targetMode} (${deviceId})`);
+    await switchToCamera("V1", deviceId, targetMode);
   } catch (err) {
     console.error(`[Client] V1 switch failed:`, err);
   }
 }
 
-// Client: switch camera on agent request (Approach 2 — uses getCameras first/last)
+// Client: switch camera on agent request (Approach 2 — uses detected bestCameras)
 async function handleSwitchCamV2(message) {
   console.log(`[Client] Switch cam request (V2)`);
 
   if (!meeting) return;
 
   try {
-    const cameras = await VideoSDK.getCameras();
-    if (!cameras || cameras.length === 0) return;
-
-    let deviceId;
-    let targetMode;
-
-    if (currentCameraMode === "front") {
-      deviceId = cameras[cameras.length - 1].deviceId;
-      console.log("Lets select this ", cameras[cameras.length - 1]);
-      targetMode = "back";
-    } else {
-      deviceId = cameras[0].deviceId;
-      console.log("Lets select this ", cameras[0]);
-      targetMode = "front";
-    }
+    const targetMode = currentCameraMode === "front" ? "back" : "front";
+    const deviceId =
+      targetMode === "front" ? bestCameras.front : bestCameras.back;
 
     if (!deviceId) {
-      console.warn(`[Client] No ${targetMode} camera available`);
+      const msg = `No best ${targetMode} camera detected on this device.`;
+      console.warn(`[Client] ${msg}`);
+      alert(msg);
       return;
     }
 
-    const customTrack = await VideoSDK.createCameraVideoTrack({
-      cameraId: deviceId,
-      optimizationMode: "motion",
-      encoderConfig: "h720p_w1280p",
-      multiStream: true,
-    });
+    console.log(
+      `[Client] V2 switching to best ${targetMode} camera:`,
+      deviceId,
+    );
 
-    console.log("video Track ", customTrack);
-
-    await meeting.changeWebcam(customTrack);
-    currentCameraMode = targetMode;
-    console.log(`[Client] V2 switched to ${targetMode} (${deviceId})`);
+    await switchToCamera("V2", deviceId, targetMode);
   } catch (err) {
     console.error(`[Client] V2 switch failed:`, err);
   }
@@ -557,6 +714,27 @@ switchCamBtn.addEventListener("click", () => {
   console.log("[Approach 2] Sent toggle pubsub to client on SWITCH_CAM_V2");
 });
 
+function setJoinButtonsEnabled(enabled) {
+  clientBtn.disabled = !enabled;
+  agentBtn.disabled = !enabled;
+}
+
+// Explicitly request camera + mic permission so device labels and
+// facingMode are available before we probe each camera.
+async function requestMediaPermission() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
+    stream.getTracks().forEach((t) => t.stop());
+    return true;
+  } catch (err) {
+    console.error("Media permission request failed:", err);
+    return false;
+  }
+}
+
 async function detectBestCameras() {
   const timingEl = document.getElementById("cameraTimingBox");
   if (!timingEl) return { front: null, back: null };
@@ -564,10 +742,24 @@ async function detectBestCameras() {
   const globalStart = performance.now();
   let logText = "Camera Detection Started...\n\n";
 
+  setJoinButtonsEnabled(false);
+  bestCameraInfo.textContent = "Detecting best cameras…";
+
+  const hasPermission = await requestMediaPermission();
+  if (!hasPermission) {
+    const msg =
+      "Camera/mic permission denied. Allow access and reload the page.";
+    bestCameraInfo.textContent = msg;
+    timingEl.innerText = msg;
+    return { front: null, back: null };
+  }
+
   try {
     const cameras = await VideoSDK.getCameras();
     if (!cameras || cameras.length === 0) {
       timingEl.innerText = "No cameras detected.";
+      bestCameraInfo.textContent = "No cameras detected.";
+      setJoinButtonsEnabled(true);
       return { front: null, back: null };
     }
 
@@ -603,6 +795,10 @@ async function detectBestCameras() {
         const score = (maxWidth || 0) * (maxHeight || 0);
         const camTime = (performance.now() - camStart).toFixed(2);
 
+        console.log(
+          `[Camera Detection] #${index + 1} "${cam.label || "Unknown"}" → max ${maxWidth}x${maxHeight}, facingMode=${facingMode || "unknown"}, score=${maxWidth}×${maxHeight}=${score}, probe time=${camTime}ms`,
+        );
+
         logText += `   Time: ${camTime} ms\n`;
         logText += `   ${maxWidth}x${maxHeight}\n`;
         logText += `   facingMode:${facingMode || "unknown"} | score:${score}\n\n`;
@@ -616,6 +812,10 @@ async function detectBestCameras() {
         track.stop();
       } catch (e) {
         logText += `   Failed (${(performance.now() - camStart).toFixed(2)} ms)\n\n`;
+        console.warn(
+          `[Camera Detection] #${index + 1} "${cam.label || "Unknown"}" failed to open:`,
+          e,
+        );
       }
     }
 
@@ -628,20 +828,58 @@ async function detectBestCameras() {
 
     // Fallback logic
     const sortedAll = [...results].sort((a, b) => b.score - a.score);
-    bestCameras.front = front?.deviceId || sortedAll[0]?.deviceId || null;
-    bestCameras.back = back?.deviceId || sortedAll[1]?.deviceId || null;
+    const frontPick = front || sortedAll[0] || null;
+    const backPick = back || sortedAll[1] || null;
+    bestCameras.front = frontPick?.deviceId || null;
+    bestCameras.back = backPick?.deviceId || null;
+
+    // Full calculation dump: ranking, picks, and how each was chosen
+    console.log(
+      "[Camera Detection] Ranking by score (score = maxWidth × maxHeight):",
+    );
+    console.table(
+      sortedAll.map((c, rank) => ({
+        rank: rank + 1,
+        label: c.label,
+        facingMode: c.facingMode || "unknown",
+        score: c.score,
+        deviceId: c.deviceId,
+      })),
+    );
+    console.log(
+      `[Camera Detection] Best front pick: ${frontPick ? `"${frontPick.label}" (${front ? "highest-score facingMode=user" : "fallback: highest score overall"})` : "None"}`,
+    );
+    console.log(
+      `[Camera Detection] Best back pick : ${backPick ? `"${backPick.label}" (${back ? "highest-score facingMode=environment" : "fallback: 2nd highest score overall"})` : "None"}`,
+    );
 
     const totalTime = (performance.now() - globalStart).toFixed(2);
-    logText += `Best Front: ${front?.label || bestCameras.front || "None"}\n`;
-    logText += `Best Back : ${back?.label || bestCameras.back || "None"}\n\n`;
+    logText += `Best Front: ${frontPick?.label || bestCameras.front || "None"}\n`;
+    logText += `Best Back : ${backPick?.label || bestCameras.back || "None"}\n\n`;
     logText += `Total Detection Time: ${totalTime} ms\n`;
     timingEl.innerText = logText;
+
+    // Print best cameras + remaining cameras on the join screen, unlock join
+    const others = results.filter(
+      (c) =>
+        c.deviceId !== bestCameras.front && c.deviceId !== bestCameras.back,
+    );
+    let infoText = `Best Front: ${frontPick?.label || "None"} | Best Back: ${backPick?.label || "None"}`;
+    if (others.length) {
+      infoText += `\nOther cameras:\n${others
+        .map((c) => `• ${c.label || c.deviceId} (score ${c.score})`)
+        .join("\n")}`;
+    }
+    bestCameraInfo.textContent = infoText;
+    setJoinButtonsEnabled(true);
 
     // Also log to console so timings are visible without opening the debug panel
     console.log(`[Camera Detection] Finished in ${totalTime} ms\n` + logText);
     return bestCameras;
   } catch (err) {
     timingEl.innerText = `Error during detection\nTime: ${(performance.now() - globalStart).toFixed(2)} ms`;
+    bestCameraInfo.textContent = "Camera detection failed — see console.";
+    setJoinButtonsEnabled(true);
     console.error("detectBestCameras failed:", err);
     return { front: null, back: null };
   }
