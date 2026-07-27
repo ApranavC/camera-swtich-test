@@ -79,11 +79,19 @@ function getLiveLocalVideoTrack() {
 // Reads the live sender track; falls back to the custom track we created
 // only if it is still alive. Warns when the result differs from what was
 // requested — i.e. the switch silently did not take effect.
-function reportEnabledCamera(context, requestedDeviceId, targetMode, fallbackStream) {
+function reportEnabledCamera(
+  context,
+  requestedDeviceId,
+  targetMode,
+  fallbackStream,
+) {
   let track = getLiveLocalVideoTrack();
   const custom = fallbackStream?.getVideoTracks?.()[0] || null;
   const liveId = track?.getSettings?.().deviceId;
-  if ((!track || liveId !== requestedDeviceId) && custom?.readyState === "live") {
+  if (
+    (!track || liveId !== requestedDeviceId) &&
+    custom?.readyState === "live"
+  ) {
     track = custom;
   }
 
@@ -128,7 +136,8 @@ async function publishClientCamInfo(type) {
       enabled: {
         deviceId: liveSettings.deviceId || activeCameraDeviceId,
         label: liveTrack?.label || activeCameraLabel,
-        facingMode: liveSettings.facingMode || activeCameraFacingMode || "unknown",
+        facingMode:
+          liveSettings.facingMode || activeCameraFacingMode || "unknown",
         mode: currentCameraMode,
       },
     };
@@ -310,7 +319,8 @@ function handleMeetingEvent(name, data) {
 
       data.on("stream-enabled", (stream) => {
         if (stream.kind === "video") createVideoElement(data, "video", stream);
-        else if (stream.kind === "share") createVideoElement(data, "share", stream);
+        else if (stream.kind === "share")
+          createVideoElement(data, "share", stream);
         else if (stream.kind === "audio") createAudioElement(data);
       });
 
@@ -504,7 +514,7 @@ async function switchToCamera(context, deviceId, targetMode) {
   publishClientCamInfo("switched");
 }
 
-// Client: switch camera on agent request (Approach 1 — uses bestCameras)
+// Client: switch camera on agent request (Approach 1 — uses getCameras() first/last)
 async function handleSwitchCamRequest(message) {
   const side = message.message;
   console.log(`[Client] Switch cam request (V1): ${side}`);
@@ -512,6 +522,10 @@ async function handleSwitchCamRequest(message) {
   if (!meeting) return;
 
   try {
+    const cameras = await VideoSDK.getCameras();
+
+    if (!cameras || cameras.length === 0) return;
+
     const targetMode =
       side === "toggle"
         ? currentCameraMode === "front"
@@ -520,14 +534,14 @@ async function handleSwitchCamRequest(message) {
         : side;
 
     const deviceId =
-      targetMode === "front" ? bestCameras.front : bestCameras.back;
+      targetMode === "front"
+        ? cameras[0].deviceId
+        : cameras[cameras.length - 1].deviceId;
 
-    if (!deviceId) {
-      const msg = `No ${targetMode} camera found on this device.`;
-      console.warn(`[Client] ${msg}`);
-      alert(msg);
-      return;
-    }
+    console.log(
+      `[Client] V1 switching to ${targetMode}:`,
+      targetMode === "front" ? cameras[0] : cameras[cameras.length - 1],
+    );
 
     await switchToCamera("V1", deviceId, targetMode);
   } catch (err) {
