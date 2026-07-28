@@ -1,5 +1,4 @@
-// Meeting ID is static as requested
-const VKYC_MEETING_ID = "jpjl-vag0-fr6v";
+
 
 /**
  * TOKEN Management:
@@ -10,7 +9,7 @@ const TOKEN = import.meta.env.VITE_VIDEOSDK_TOKEN;
 
 // Exposing to window for global access
 window.TOKEN = TOKEN;
-window.VKYC_MEETING_ID = VKYC_MEETING_ID;
+window.VKYC_MEETING_ID = "";
 
 if (!TOKEN) {
     console.error(
